@@ -151,22 +151,22 @@ InitilaiseGame: ; Begin Subroutine
     STA PPUADDR
 
     ; Write the background colour
-    LDA #$30
+    LDA #$0F
     STA PPUDATA
 
     
     ; Write the palette colours
-    LDA #$17
+    LDA #$15
     STA PPUDATA
-    LDA #$0F
+    LDA #$11
     STA PPUDATA
-    LDA #$27
+    LDA #$30
     STA PPUDATA
 
     ; Write sprite data for sprite 0
     LDA #120            ;Y position
     STA sprite_player + SPRITE_Y
-    LDA #1              ; Tile number
+    LDA #0              ; Tile number
     STA sprite_player + SPRITE_TILE
     LDA #0              ; Attributes
     STA sprite_player + SPRITE_ATTRIB
@@ -174,40 +174,40 @@ InitilaiseGame: ; Begin Subroutine
     STA sprite_player + SPRITE_X
 
     ; Intialise enemies
-    LDX #0
-    LDA #ENEMY_SQUAD_HEIGHT * ENEMY_SPACING
-    STA temp_y
-InitEnemies_LoopY:
-    LDA #ENEMY_SQUAD_WIDTH * ENEMY_SPACING
-    STA temp_x
-InitEnemies_LoopX:
-    ; Accumulator = temp_x here
-    STA sprite_enemy + SPRITE_X, x
-    LDA temp_y
-    STA sprite_enemy + SPRITE_Y, x 
-    LDA #0
-    STA sprite_enemy + SPRITE_ATTRIB, x
-    LDA #1
-    STA sprite_enemy + SPRITE_TILE, x
-    STA enemy_info + ENEMY_SPEED, x
-    STA enemy_info + ENEMY_ALIVE, x
-    ; Increment X register by 4
-    TXA
-    CLC
-    ADC #4
-    TAX
-    ; Loop check for x value
-    LDA temp_x
-    SEC
-    SBC #ENEMY_SPACING
-    STA temp_x
-    BNE InitEnemies_LoopX
-    ; Loop check for y value
-    LDA temp_y
-    SEC
-    SBC #ENEMY_SPACING
-    STA temp_y
-    BNE InitEnemies_LoopY
+;     LDX #0
+;     LDA #ENEMY_SQUAD_HEIGHT * ENEMY_SPACING
+;     STA temp_y
+; InitEnemies_LoopY:
+;     LDA #ENEMY_SQUAD_WIDTH * ENEMY_SPACING
+;     STA temp_x
+; InitEnemies_LoopX:
+;     ; Accumulator = temp_x here
+;     STA sprite_enemy + SPRITE_X, x
+;     LDA temp_y
+;     STA sprite_enemy + SPRITE_Y, x 
+;     LDA #0
+;     STA sprite_enemy + SPRITE_ATTRIB, x
+;     LDA #1
+;     STA sprite_enemy + SPRITE_TILE, x
+;     STA enemy_info + ENEMY_SPEED, x
+;     STA enemy_info + ENEMY_ALIVE, x
+;     ; Increment X register by 4
+;     TXA
+;     CLC
+;     ADC #4
+;     TAX
+;     ; Loop check for x value
+;     LDA temp_x
+;     SEC
+;     SBC #ENEMY_SPACING
+;     STA temp_x
+;     BNE InitEnemies_LoopX
+;     ; Loop check for y value
+;     LDA temp_y
+;     SEC
+;     SBC #ENEMY_SPACING
+;     STA temp_y
+;     BNE InitEnemies_LoopY
 
     RTS ; End subroutine
 
@@ -243,14 +243,14 @@ ReadController:
 ReadRight_Done: 
 
     ; Read Down button
-     LDA joypad1_state
-    AND #BUTTON_DOWN
-    BEQ ReadDown_Done 
-    LDA sprite_player + SPRITE_Y
-    CLC 
-    ADC #1
-    STA sprite_player + SPRITE_Y
-ReadDown_Done: 
+     ;LDA joypad1_state
+    ;AND #BUTTON_DOWN
+    ;BEQ ReadDown_Done 
+    ;LDA sprite_player + SPRITE_Y
+    ;CLC 
+    ;ADC #1
+    ;STA sprite_player + SPRITE_Y
+;ReadDown_Done: 
 
  ; React to Left button
     LDA joypad1_state
@@ -263,14 +263,14 @@ ReadDown_Done:
 ReadLeft_Done: 
 
     ; Read Up button
-     LDA joypad1_state
-    AND #BUTTON_UP
-    BEQ ReadUp_Done 
-    LDA sprite_player + SPRITE_Y
-    SEC 
-    SBC #1
-    STA sprite_player + SPRITE_Y
-ReadUp_Done: 
+     ;LDA joypad1_state
+    ;AND #BUTTON_UP
+    ;BEQ ReadUp_Done 
+    ;LDA sprite_player + SPRITE_Y
+    ;SEC 
+    ;SBC #1
+    ;STA sprite_player + SPRITE_Y
+;ReadUp_Done: 
 
     ; React to A button
     LDA joypad1_state
@@ -420,4 +420,4 @@ UpdateEnemies_End:
 
     .bank 2
     .org $0000
-    .incbin "comp310.chr"
+    .incbin "SpideyMan.chr"
