@@ -48,6 +48,10 @@ enemy_info    .rs 4 * NUM_ENEMIES
     
     .rsset $0200
 sprite_player   .rs 4
+sprite_player_1 .rs 4
+sprite_player_2 .rs 4
+sprite_player_3 .rs 4
+
 sprite_bullet   .rs 4
 sprite_enemy    .rs 4 * NUM_ENEMIES
 
@@ -173,6 +177,36 @@ InitilaiseGame: ; Begin Subroutine
     LDA #128            ; X position
     STA sprite_player + SPRITE_X
 
+    ; Write sprite data for sprite 1
+    LDA #120            ;Y position
+    STA sprite_player_1 + SPRITE_Y
+    LDA #1             ; Tile number
+    STA sprite_player_1 + SPRITE_TILE
+    LDA #0              ; Attributes
+    STA sprite_player_1 + SPRITE_ATTRIB
+    LDA #136            ; X position
+    STA sprite_player_1 + SPRITE_X
+
+    ; Write sprite data for sprite 2
+    LDA #128            ;Y position
+    STA sprite_player_2 + SPRITE_Y
+    LDA #2             ; Tile number
+    STA sprite_player_2 + SPRITE_TILE
+    LDA #0              ; Attributes
+    STA sprite_player_2 + SPRITE_ATTRIB
+    LDA #126            ; X position
+    STA sprite_player_2 + SPRITE_X
+
+; Write sprite data for sprite 3
+    LDA #128            ;Y position
+    STA sprite_player_3 + SPRITE_Y
+    LDA #3            ; Tile number
+    STA sprite_player_3 + SPRITE_TILE
+    LDA #0              ; Attributes
+    STA sprite_player_3 + SPRITE_ATTRIB
+    LDA #134            ; X position
+    STA sprite_player_3 + SPRITE_X
+
     ; Intialise enemies
 ;     LDX #0
 ;     LDA #ENEMY_SQUAD_HEIGHT * ENEMY_SPACING
@@ -240,6 +274,18 @@ ReadController:
     CLC 
     ADC #1
     STA sprite_player + SPRITE_X
+    LDA sprite_player_1 + SPRITE_X
+    CLC
+    ADC #1
+    STA sprite_player_1 + SPRITE_X
+    LDA sprite_player_2 + SPRITE_X
+    CLC
+    ADC #1
+    STA sprite_player_2 + SPRITE_X
+    LDA sprite_player_3 + SPRITE_X
+    CLC
+    ADC #1
+    STA sprite_player_3 + SPRITE_X
 ReadRight_Done: 
 
     ; Read Down button
@@ -260,6 +306,18 @@ ReadRight_Done:
     SEC 
     SBC #1
     STA sprite_player + SPRITE_X
+    LDA sprite_player_1 + SPRITE_X
+    SEC
+    SBC #1
+    STA sprite_player_1 + SPRITE_X
+    LDA sprite_player_2 + SPRITE_X
+    SEC
+    SBC #1
+    STA sprite_player_2 + SPRITE_X
+    LDA sprite_player_3 + SPRITE_X
+    SEC
+    SBC #1
+    STA sprite_player_3 + SPRITE_X
 ReadLeft_Done: 
 
     ; Read Up button
