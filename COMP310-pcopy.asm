@@ -40,11 +40,12 @@ BULLET_HITBOX_WIDTH     = 2
 BULLET_HITBOX_HEIGHT    = 6
 
     .rsset $0000
-joypad1_state .rs 1
-bullet_active .rs 1
-temp_x        .rs 1
-temp_y        .rs 1
-enemy_info    .rs 4 * NUM_ENEMIES
+joypad1_state       .rs 1
+nametable_address   .rs 2
+bullet_active       .rs 1
+temp_x              .rs 1
+temp_y              .rs 1
+enemy_info          .rs 4 * NUM_ENEMIES
     
     .rsset $0200
 sprite_player   .rs 4
@@ -135,8 +136,12 @@ vblankwait2:
     LDA #%10000000      ; Enable NMI
     STA PPUCTRL
 
-    LDA #%00010000      ; Enable sprites
+    LDA #%00011000      ; Enable sprites and background
     STA PPUMASK
+
+    LDA #0
+    STA PPUSCROLL       ; set x scroll
+    STA PPUSCROLL       ; set y scroll
 
       ; Enter an infinite loop
 forever:
@@ -148,7 +153,23 @@ InitilaiseGame: ; Begin Subroutine
     ; Reset the PPU high/low latch
     LDA $2002
 
-    ; Write address $3F10 to the PPU
+    ; Write address $3F00 (Background palette) to the PPU
+    LDA #$3F
+    STA PPUADDR
+    LDA #$00
+    STA PPUADDR
+
+    ; Write the background colour
+    LDA #$31
+    STA PPUDATA
+    LDA #$09
+    STA PPUDATA
+    LDA #$19
+    STA PPUDATA
+    LDA #$29
+    STA PPUDATA
+
+    ; Write address $3F10 (Sprite Palette) to the PPU
     LDA #$3F
     STA PPUADDR
     LDA #$10
@@ -206,6 +227,29 @@ InitilaiseGame: ; Begin Subroutine
     STA sprite_player_3 + SPRITE_ATTRIB
     LDA #134            ; X position
     STA sprite_player_3 + SPRITE_X
+
+    ; Load nametable data
+    LDA #$20            ; Write address $2000 to PPUADDR register
+    STA PPUADDR
+    LDA #$00
+    STA PPUADDR
+
+    LDA LOW(NametableData)
+    STA nametable_address
+    LDA HIGH(NametableData)
+    STA nametable_address + 1
+LoadNametable_OuterLoop:
+    LDY #0
+LoadNametable_InnerLoop:
+    LDA [nametable_address], Y
+    BEQ LoadNametable_End
+    STA PPUDATA
+    INY
+    BNE LoadNametable_InnerLoop
+    INC nametable_address + 1
+    JMP LoadNametable_OuterLoop
+LoadNametable_End:
+
 
     ; Intialise enemies
 ;     LDX #0
@@ -331,37 +375,37 @@ ReadLeft_Done:
 ;ReadUp_Done: 
 
     ; React to A button
-    LDA joypad1_state
-    AND #BUTTON_A
-    BEQ ReadA_Done
-    ; Spawn a Bullet if one is not active
-    LDA bullet_active
-    BNE ReadA_Done
-    ; No bullet active, so spawn one
-    LDA #1
-    STA bullet_active
-    LDA sprite_player + SPRITE_Y            ;Y position
-    STA sprite_bullet + SPRITE_Y
-    LDA #2              ; Tile number
-    STA sprite_bullet + SPRITE_TILE
-    LDA #0              ; Attributes
-    STA sprite_bullet + SPRITE_ATTRIB
-    LDA sprite_player + SPRITE_X            ; X position
-    STA sprite_bullet + SPRITE_X
-ReadA_Done:
+    ; LDA joypad1_state
+    ; AND #BUTTON_A
+    ; BEQ ReadA_Done
+;     ; Spawn a Bullet if one is not active
+;     LDA bullet_active
+;     BNE ReadA_Done
+;     ; No bullet active, so spawn one
+;     LDA #1
+;     STA bullet_active
+;     LDA sprite_player + SPRITE_Y            ;Y position
+;     STA sprite_bullet + SPRITE_Y
+;     LDA #2              ; Tile number
+;     STA sprite_bullet + SPRITE_TILE
+;     LDA #0              ; Attributes
+;     STA sprite_bullet + SPRITE_ATTRIB
+;     LDA sprite_player + SPRITE_X            ; X position
+;     STA sprite_bullet + SPRITE_X
+; ReadA_Done:
 
-    ; Update the bullet
-    LDA bullet_active
-    BEQ UpdateBullet_Done
-    LDA sprite_bullet + SPRITE_Y
-    SEC
-    SBC #1
-    STA sprite_bullet + SPRITE_Y
-    BCS UpdateBullet_Done
-    ; If carry flag is clear, bullet has left the top of the screen -- destroy it
-    LDA #0
-    STA bullet_active
-UpdateBullet_Done:
+;     ; Update the bullet
+;     LDA bullet_active
+;     BEQ UpdateBullet_Done
+;     LDA sprite_bullet + SPRITE_Y
+;     SEC
+;     SBC #1
+;     STA sprite_bullet + SPRITE_Y
+;     BCS UpdateBullet_Done
+;     ; If carry flag is clear, bullet has left the top of the screen -- destroy it
+;     LDA #0
+;     STA bullet_active
+; UpdateBullet_Done:
 
     ; Update enemies
     LDX #(NUM_ENEMIES-1)*4
@@ -464,7 +508,42 @@ UpdateEnemies_End:
 
     RTI         ; Return from interrupt
 
-    ; ----------------------------------------------------------------------------------------------------------
+; ----------------------------------------------------------------------------------------------------------
+
+    NametableData:
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $03, $01, $02, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $01, $02, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $00 ; Null terminator
+
+; ----------------------------------------------------------------------------------------------------------
 
 
 
