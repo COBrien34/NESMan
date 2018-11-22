@@ -46,6 +46,8 @@ bullet_active       .rs 1
 temp_x              .rs 1
 temp_y              .rs 1
 enemy_info          .rs 4 * NUM_ENEMIES
+player_speed        .rs 2   ; in subpixels per frame -- 16 bits
+player_position_sub .rs 1   ; in subpixels
     
     .rsset $0200
 sprite_player   .rs 4
@@ -61,6 +63,9 @@ SPRITE_Y        .rs 1
 SPRITE_TILE     .rs 1
 SPRITE_ATTRIB   .rs 1
 SPRITE_X        .rs 1
+
+GRAVITY          =  0*256   ; in subpixels/frame*2
+JUMP_SPEED       = (-2 * 256 + 128) ; in subpixels/frame
 
     .rsset $0000
 ENEMY_SPEED     .rs 1
@@ -159,14 +164,14 @@ InitilaiseGame: ; Begin Subroutine
     LDA #$00
     STA PPUADDR
 
-    ; Write the background colour
-    LDA #$31
+    ; Write the background palette
+    LDA #$0F
     STA PPUDATA
-    LDA #$09
+    LDA #$3E
     STA PPUDATA
-    LDA #$19
+    LDA #$2D
     STA PPUDATA
-    LDA #$29
+    LDA #$10
     STA PPUDATA
 
     ; Write address $3F10 (Sprite Palette) to the PPU
@@ -189,7 +194,7 @@ InitilaiseGame: ; Begin Subroutine
     STA PPUDATA
 
     ; Write sprite data for sprite 0
-    LDA #120            ;Y position
+    LDA #199           ;Y position
     STA sprite_player + SPRITE_Y
     LDA #0              ; Tile number
     STA sprite_player + SPRITE_TILE
@@ -199,7 +204,7 @@ InitilaiseGame: ; Begin Subroutine
     STA sprite_player + SPRITE_X
 
     ; Write sprite data for sprite 1
-    LDA #120            ;Y position
+    LDA #199            ;Y position
     STA sprite_player_1 + SPRITE_Y
     LDA #1             ; Tile number
     STA sprite_player_1 + SPRITE_TILE
@@ -209,7 +214,7 @@ InitilaiseGame: ; Begin Subroutine
     STA sprite_player_1 + SPRITE_X
 
     ; Write sprite data for sprite 2
-    LDA #128            ;Y position
+    LDA #207            ;Y position
     STA sprite_player_2 + SPRITE_Y
     LDA #2             ; Tile number
     STA sprite_player_2 + SPRITE_TILE
@@ -219,7 +224,7 @@ InitilaiseGame: ; Begin Subroutine
     STA sprite_player_2 + SPRITE_X
 
 ; Write sprite data for sprite 3
-    LDA #128            ;Y position
+    LDA #207            ;Y position
     STA sprite_player_3 + SPRITE_Y
     LDA #3            ; Tile number
     STA sprite_player_3 + SPRITE_TILE
@@ -234,9 +239,9 @@ InitilaiseGame: ; Begin Subroutine
     LDA #$00
     STA PPUADDR
 
-    LDA LOW(NametableData)
+    LDA #LOW(NametableData)
     STA nametable_address
-    LDA HIGH(NametableData)
+    LDA #HIGH(NametableData)
     STA nametable_address + 1
 LoadNametable_OuterLoop:
     LDY #0
@@ -249,6 +254,19 @@ LoadNametable_InnerLoop:
     INC nametable_address + 1
     JMP LoadNametable_OuterLoop
 LoadNametable_End:
+
+    ; Load attribute data
+    LDA #$23            ; Write address $2000 to PPUADDR register
+    STA PPUADDR
+    LDA #$C0
+    STA PPUADDR
+
+    LDA #0
+    LDX #64
+LoadAttributes_Loop:
+    STA PPUDATA
+    DEX 
+    BNE LoadAttributes_Loop
 
 
     ; Intialise enemies
@@ -375,9 +393,14 @@ ReadLeft_Done:
 ;ReadUp_Done: 
 
     ; React to A button
-    ; LDA joypad1_state
-    ; AND #BUTTON_A
-    ; BEQ ReadA_Done
+    LDA joypad1_state
+    AND #BUTTON_A
+    BEQ ReadA_Done
+    ; Set player speed
+    LDA #LOW(JUMP_SPEED)
+    STA player_speed
+    LDA #HIGH(JUMP_SPEED)
+    STA player_speed + 1
 ;     ; Spawn a Bullet if one is not active
 ;     LDA bullet_active
 ;     BNE ReadA_Done
@@ -392,7 +415,26 @@ ReadLeft_Done:
 ;     STA sprite_bullet + SPRITE_ATTRIB
 ;     LDA sprite_player + SPRITE_X            ; X position
 ;     STA sprite_bullet + SPRITE_X
-; ReadA_Done:
+ReadA_Done:
+
+    ; Update player sprite
+    ; First, update speed
+    LDA player_speed     ; Low 8 bits
+    CLC
+    ADC #LOW(GRAVITY)
+    STA player_speed
+    LDA player_speed + 1 ; High 8 bits
+    ADC #HIGH(GRAVITY)   ; NB: *don't* clear the carry flag
+    STA player_speed + 1
+
+    ; Second, update position
+    LDA player_position_sub ; Low 8 bits
+    CLC
+    ADC player_speed
+    STA player_position_sub
+    LDA sprite_player + SPRITE_Y ; High 8 bits
+    ADC player_speed + 1         ; NB: *don't* clear the carry flag
+    STA sprite_player + SPRITE_Y
 
 ;     ; Update the bullet
 ;     LDA bullet_active
@@ -407,98 +449,98 @@ ReadLeft_Done:
 ;     STA bullet_active
 ; UpdateBullet_Done:
 
-    ; Update enemies
-    LDX #(NUM_ENEMIES-1)*4
-UpdateEnemies_Loop:
-    ; Check if enemy is alive
-    LDA enemy_info + ENEMY_ALIVE, x
-    BNE UpdateEnemies_Start
-    JMP UpdateEnemies_Next
-UpdateEnemies_Start:
-    LDA sprite_enemy + SPRITE_X, x
-    CLC
-    ADC enemy_info + ENEMY_SPEED, x
-    STA sprite_enemy + SPRITE_X, x
-    CMP #256 - ENEMY_SPACING
-    BCS UpdateEnemies_Reverse
-    CMP #ENEMY_SPACING
-    BCC UpdateEnemies_Reverse
-    JMP UpdateEnemies_NoReverse
-UpdateEnemies_Reverse:
-    ; Reverse Direction and descend
-    LDA #0
-    SEC 
-    SBC enemy_info + ENEMY_SPEED, x
-    STA enemy_info + ENEMY_SPEED, x
-    LDA sprite_enemy + SPRITE_Y, x
-    CLC
-    ADC #ENEMY_DESCENT_SPEED
-    STA sprite_enemy + SPRITE_Y, x
-    LDA sprite_enemy + SPRITE_ATTRIB, x
-    EOR #%01000000
-    STA sprite_enemy + SPRITE_ATTRIB, x
-UpdateEnemies_NoReverse:
+;     ; Update enemies
+;     LDX #(NUM_ENEMIES-1)*4
+; UpdateEnemies_Loop:
+;     ; Check if enemy is alive
+;     LDA enemy_info + ENEMY_ALIVE, x
+;     BNE UpdateEnemies_Start
+;     JMP UpdateEnemies_Next
+; UpdateEnemies_Start:
+;     LDA sprite_enemy + SPRITE_X, x
+;     CLC
+;     ADC enemy_info + ENEMY_SPEED, x
+;     STA sprite_enemy + SPRITE_X, x
+;     CMP #256 - ENEMY_SPACING
+;     BCS UpdateEnemies_Reverse
+;     CMP #ENEMY_SPACING
+;     BCC UpdateEnemies_Reverse
+;     JMP UpdateEnemies_NoReverse
+; UpdateEnemies_Reverse:
+;     ; Reverse Direction and descend
+;     LDA #0
+;     SEC 
+;     SBC enemy_info + ENEMY_SPEED, x
+;     STA enemy_info + ENEMY_SPEED, x
+;     LDA sprite_enemy + SPRITE_Y, x
+;     CLC
+;     ADC #ENEMY_DESCENT_SPEED
+;     STA sprite_enemy + SPRITE_Y, x
+;     LDA sprite_enemy + SPRITE_ATTRIB, x
+;     EOR #%01000000
+;     STA sprite_enemy + SPRITE_ATTRIB, x
+; UpdateEnemies_NoReverse:
 
-                               ;              \1        \2        \3            \4            \5            \6           \7
-CheckCollisionWithEnemy .macro ; parameters: object_x, object_y, object_hit_x, object_hit_y, object_hit_w, object_hit_h, no_collision_label
-    ; If there is a collision, execution continues to immediately after this macro
-    ; Else, jump to no_collision_label
-    LDA sprite_enemy + SPRITE_X, x ; Calculate x_enemy - w_bullet
-    .if \3 > 0
-    SEC
-    SBC \3
-    .endif 
-    SEC
-    SBC \5 + 1                     ; Assume w2 + 8
-    CMP \1                         ; Compare with x_bullet (x2)
-    BCS \7                         ; Branch if x1-w2 >= x2
-    CLC
-    ADC \5 + 1 + ENEMY_HITBOX_WIDTH ; Calculate e_enemy + w_enemy (x1+w1), assuming w2 + 8
-    CMP \1                         ; Compare with x_bullet (x2)
-    BCC \7                         ; Branching if x1+w1 < x2
+;                                ;              \1        \2        \3            \4            \5            \6           \7
+; CheckCollisionWithEnemy .macro ; parameters: object_x, object_y, object_hit_x, object_hit_y, object_hit_w, object_hit_h, no_collision_label
+;     ; If there is a collision, execution continues to immediately after this macro
+;     ; Else, jump to no_collision_label
+;     LDA sprite_enemy + SPRITE_X, x ; Calculate x_enemy - w_bullet
+;     .if \3 > 0
+;     SEC
+;     SBC \3
+;     .endif 
+;     SEC
+;     SBC \5 + 1                     ; Assume w2 + 8
+;     CMP \1                         ; Compare with x_bullet (x2)
+;     BCS \7                         ; Branch if x1-w2 >= x2
+;     CLC
+;     ADC \5 + 1 + ENEMY_HITBOX_WIDTH ; Calculate e_enemy + w_enemy (x1+w1), assuming w2 + 8
+;     CMP \1                         ; Compare with x_bullet (x2)
+;     BCC \7                         ; Branching if x1+w1 < x2
 
-    LDA sprite_enemy + SPRITE_Y, x ; Calculate y_enemy - h_bullet
-    .if \3 > 0
-    SEC
-    SBC \4
-    .endif
-    SEC 
-    SBC \6 + 1                     ; Assume h2 + 8
-    CMP \2                         ; Compare with y_bullet (y2)
-    BCS \7                         ; Branch if y1-h2 >= y2
-    CLC
-    ADC \6 + 1 + ENEMY_HITBOX_HEIGHT ; Calculate e_enemy + w_enemy (y1+h1), assuming h2 + 8
-    CMP \2                         ; Compare with y_bullet (y2)
-    BCC \7                         ; Branching if y1+h1 < y2
-    .endm
+;     LDA sprite_enemy + SPRITE_Y, x ; Calculate y_enemy - h_bullet
+;     .if \3 > 0
+;     SEC
+;     SBC \4
+;     .endif
+;     SEC 
+;     SBC \6 + 1                     ; Assume h2 + 8
+;     CMP \2                         ; Compare with y_bullet (y2)
+;     BCS \7                         ; Branch if y1-h2 >= y2
+;     CLC
+;     ADC \6 + 1 + ENEMY_HITBOX_HEIGHT ; Calculate e_enemy + w_enemy (y1+h1), assuming h2 + 8
+;     CMP \2                         ; Compare with y_bullet (y2)
+;     BCC \7                         ; Branching if y1+h1 < y2
+;     .endm
 
-    ; Check collision with bullet
-    CheckCollisionWithEnemy sprite_bullet + SPRITE_X, sprite_bullet + SPRITE_Y, #BULLET_HIT_BOX_X, #BULLET_HIT_BOX_Y, #BULLET_HITBOX_WIDTH, #BULLET_HITBOX_HEIGHT, UpdateEnemies_NoCollision
+;     ; Check collision with bullet
+;     CheckCollisionWithEnemy sprite_bullet + SPRITE_X, sprite_bullet + SPRITE_Y, #BULLET_HIT_BOX_X, #BULLET_HIT_BOX_Y, #BULLET_HITBOX_WIDTH, #BULLET_HITBOX_HEIGHT, UpdateEnemies_NoCollision
 
-     ; Handle Collision
-    LDA #0
-    STA bullet_active              ; Destroy Bullet and Enemy once it collides
-    STA enemy_info + ENEMY_ALIVE, x
-    LDA #$FF 
-    STA sprite_bullet + SPRITE_Y 
-    STA sprite_enemy + SPRITE_Y, x
-    UpdateEnemies_NoCollision:
+;      ; Handle Collision
+;     LDA #0
+;     STA bullet_active              ; Destroy Bullet and Enemy once it collides
+;     STA enemy_info + ENEMY_ALIVE, x
+;     LDA #$FF 
+;     STA sprite_bullet + SPRITE_Y 
+;     STA sprite_enemy + SPRITE_Y, x
+;     UpdateEnemies_NoCollision:
 
-    ; Check collision with player 
-    CheckCollisionWithEnemy sprite_player + SPRITE_X, sprite_player + SPRITE_Y, #0, #0, #8, #8, UpdateEnemies_NoCollisionWithPlayer
-    ; Handle collision
-    JSR InitilaiseGame
-    JMP UpdateEnemies_End
-UpdateEnemies_NoCollisionWithPlayer:
+;     ; Check collision with player 
+;     CheckCollisionWithEnemy sprite_player + SPRITE_X, sprite_player + SPRITE_Y, #0, #0, #8, #8, UpdateEnemies_NoCollisionWithPlayer
+;     ; Handle collision
+;     JSR InitilaiseGame
+;     JMP UpdateEnemies_End
+; UpdateEnemies_NoCollisionWithPlayer:
 
-    UpdateEnemies_Next:
-    DEX
-    DEX
-    DEX
-    DEX
-    BMI UpdateEnemies_End
-    JMP UpdateEnemies_Loop
-UpdateEnemies_End:
+;     UpdateEnemies_Next:
+;     DEX
+;     DEX
+;     DEX
+;     DEX
+;     BMI UpdateEnemies_End
+;     JMP UpdateEnemies_Loop
+; UpdateEnemies_End:
 
     ; Copy sprite data to the PPU
     LDA #0
@@ -511,36 +553,36 @@ UpdateEnemies_End:
 ; ----------------------------------------------------------------------------------------------------------
 
     NametableData:
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $03, $01, $02, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $01, $02, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03, $10, $11, $12, $13, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03, $20, $21, $22, $23, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
-    .db $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03, $30, $31, $32, $33, $03, $03, $03, $03, $03, $03, $03, $03, $03
+    .db $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $05, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $10, $11, $12, $13, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $20, $21, $22, $23, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $30, $31, $32, $33, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $10, $11, $12, $13, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $20, $21, $22, $23, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
+    .db $42, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $43, $44
+    .db $42, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45, $45
+    .db $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04
     .db $00 ; Null terminator
 
 ; ----------------------------------------------------------------------------------------------------------
