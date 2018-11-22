@@ -64,8 +64,8 @@ SPRITE_TILE     .rs 1
 SPRITE_ATTRIB   .rs 1
 SPRITE_X        .rs 1
 
-GRAVITY          =  0*256   ; in subpixels/frame*2
-JUMP_SPEED       = (-2 * 256 + 128) ; in subpixels/frame
+GRAVITY          =  0  ; in subpixels/frame*2
+JUMP_SPEED       = -(2 * 256 + 128) ; in subpixels/frame
 
     .rsset $0000
 ENEMY_SPEED     .rs 1
@@ -435,6 +435,30 @@ ReadA_Done:
     LDA sprite_player + SPRITE_Y ; High 8 bits
     ADC player_speed + 1         ; NB: *don't* clear the carry flag
     STA sprite_player + SPRITE_Y
+
+    LDA player_position_sub ; Low 8 bits
+    CLC
+    ADC player_speed
+    STA player_position_sub
+    LDA sprite_player_1 + SPRITE_Y ; High 8 bits
+    ADC player_speed + 1         ; NB: *don't* clear the carry flag
+    STA sprite_player_1 + SPRITE_Y
+
+    LDA player_position_sub ; Low 8 bits
+    CLC
+    ADC player_speed
+    STA player_position_sub
+    LDA sprite_player_2 + SPRITE_Y ; High 8 bits
+    ADC player_speed + 1         ; NB: *don't* clear the carry flag
+    STA sprite_player_2 + SPRITE_Y
+
+    LDA player_position_sub ; Low 8 bits
+    CLC
+    ADC player_speed
+    STA player_position_sub
+    LDA sprite_player_3 + SPRITE_Y ; High 8 bits
+    ADC player_speed + 1         ; NB: *don't* clear the carry flag
+    STA sprite_player_3 + SPRITE_Y
 
 ;     ; Update the bullet
 ;     LDA bullet_active
