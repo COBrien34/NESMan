@@ -66,7 +66,7 @@ SPRITE_ATTRIB   .rs 1
 SPRITE_X        .rs 1
 
 GRAVITY          =  10  ; in subpixels/frame*2
-JUMP_SPEED       = -(2 * 256 + 128) ; in subpixels/frame
+JUMP_SPEED       = -(1 * 256 + 128) ; in subpixels/frame
 
     .rsset $0000
 ENEMY_SPEED     .rs 1
@@ -447,6 +447,9 @@ GroundCheck:
     LDA #214
     SBC #15
     STA sprite_player + SPRITE_Y
+    LDA #0
+    STA player_speed
+    STA player_speed + 1
 
 NotTouchingGround:
 
