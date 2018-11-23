@@ -403,17 +403,7 @@ ReadLeft_Done:
     LDA #HIGH(JUMP_SPEED)
     STA player_speed + 1
 
-    ; LDA player_sprite + SPRITE_Y
-    ; ADC #08
-    ; CMP #140
-    ; BCS NotTouchingGround
-
-    ; ;If touching ground
-    ; LDA #140
-    ; SBC #8
-    ; LDA player_sprite + SPRITE_Y
-
-NotTouchingGround:
+    
 ;     ; Spawn a Bullet if one is not active
 ;     LDA bullet_active
 ;     BNE ReadA_Done
@@ -448,11 +438,24 @@ ReadA_Done:
     LDA sprite_player + SPRITE_Y ; High 8 bits
     ADC player_speed + 1         ; NB: *don't* clear the carry flag
     STA sprite_player + SPRITE_Y
+
+GroundCheck:
+    LDA sprite_player + SPRITE_Y
+    ADC #15
+    CMP #214
+    BCC NotTouchingGround
+    LDA #214
+    SBC #15
+    STA sprite_player + SPRITE_Y
+
+NotTouchingGround:
+
+AlignPlayerSprites:
+    LDA sprite_player + SPRITE_Y
     STA sprite_player_1 + SPRITE_Y
-    ADC #08
+    ADC #07
     STA sprite_player_2 + SPRITE_Y
     STA sprite_player_3 + SPRITE_Y
-
 ;     ; Update the bullet
 ;     LDA bullet_active
 ;     BEQ UpdateBullet_Done
