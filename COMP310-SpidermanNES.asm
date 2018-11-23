@@ -448,14 +448,10 @@ ReadA_Done:
     LDA sprite_player + SPRITE_Y ; High 8 bits
     ADC player_speed + 1         ; NB: *don't* clear the carry flag
     STA sprite_player + SPRITE_Y
-
-    LDA sprite_player + SPRITE_Y
-    ADC #1
-    STA sprite_player + SPRITE_Y
-    STA sprite_player_2 + SPRITE_Y + 8
-    ADC #8
-    STA sprite_player_1 + SPRITE_Y + 4
-    STA sprite_player_3 + SPRITE_Y + 12
+    STA sprite_player_1 + SPRITE_Y
+    ADC #08
+    STA sprite_player_2 + SPRITE_Y
+    STA sprite_player_3 + SPRITE_Y
 
 ;     ; Update the bullet
 ;     LDA bullet_active
